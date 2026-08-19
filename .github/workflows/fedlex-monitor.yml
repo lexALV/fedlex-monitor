@@ -60,3 +60,37 @@ jobs:
       - name: GitHub Pages veröffentlichen
         id: deployment
         uses: actions/deploy-pages@v5
+
+  keepalive:
+    name: Zeitplan aktiv halten
+    needs:
+      - build
+      - deploy
+    if: ${{ always() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Monatliche Repository-Aktivität sicherstellen
+        shell: bash
+        run: |
+          set -euo pipefail
+          month="$(date -u +'%Y-%m')"
+          file=".github/monitor-heartbeat.txt"
+
+          if grep -Fxq "$month" "$file"; then
+            echo "Wartungsaktivität für $month ist bereits vorhanden."
+            exit 0
+          fi
+
+          printf '%s\n' "$month" > "$file"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$file"
+          git commit -m "Zeitplan automatisch aktiv halten [skip ci]"
+          git push origin main

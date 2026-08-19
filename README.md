@@ -117,6 +117,19 @@ Für das bestehende Repository sind diese URLs verfügbar:
 
 GitHub zeigt die endgültige URL zusätzlich beim erfolgreichen Deploy-Schritt an.
 
+### Zeitplan dauerhaft aktiv halten
+
+GitHub kann Zeitpläne öffentlicher, längere Zeit unveränderter Repositorys nach
+60 Tagen ohne Aktivität deaktivieren. Deshalb prüft derselbe tägliche Workflow
+nach der Veröffentlichung die Datei `.github/monitor-heartbeat.txt`. Einmal pro
+Monat wird darin der aktuelle Monat gespeichert und automatisch nach `main`
+übertragen. Die Datei liegt nicht unter `site`, wird nicht veröffentlicht und
+verändert deshalb keine von WebSite-Watcher überwachte Seite.
+
+Der automatische Wartungs-Commit verwendet das kurzlebige `GITHUB_TOKEN` des
+Workflows und enthält zusätzlich `[skip ci]`. Dadurch entsteht kein zweiter
+Workflow-Lauf und keine Ausführungsschleife.
+
 ## Empfehlung für WebSite-Watcher
 
 Die CSV-URL der gewünschten Sprache verwenden und eine einfache Textprüfung

@@ -3,6 +3,7 @@ PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
 SELECT DISTINCT
+  ?languageCode
   ?effectiveDate
   ?abstract
   ?targetSubdivision
@@ -12,6 +13,8 @@ SELECT DISTINCT
   ?authority
   ?act
 WHERE {
+  VALUES ?languageCode { "de" "fr" "it" }
+
   ?impact a jolux:LegalResourceImpact ;
           jolux:legalResourceImpactHasDateEntryInForce ?effectiveDate ;
           jolux:impactToLegalResource ?targetSubdivision ;
@@ -34,10 +37,11 @@ WHERE {
   OPTIONAL {
     ?act jolux:responsibilityOf ?institution .
     ?institution skos:prefLabel ?authority .
-    FILTER(lang(?authority) = "de")
+    FILTER(lang(?authority) = ?languageCode)
   }
 }
 ORDER BY
+  ?languageCode
   ?effectiveDate
   ?abstract
   ?targetSubdivision

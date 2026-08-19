@@ -20,6 +20,7 @@ from monitor import (  # noqa: E402
     natural_key,
     resolve_end_date,
     selection_matches,
+    validate_entry_language_coverage,
 )
 
 
@@ -62,11 +63,11 @@ class MonitorTests(unittest.TestCase):
         )
 
     def test_dynamic_end_date_uses_five_calendar_years(self) -> None:
-        end_date, label = resolve_end_date(
+        end_date, years = resolve_end_date(
             {"years_from_today": 5}, today=date(2026, 8, 19)
         )
         self.assertEqual(end_date, "2031-08-19")
-        self.assertEqual(label, "5 Jahre nach dem jeweiligen Abruf")
+        self.assertEqual(years, 5)
 
         leap_end, _ = resolve_end_date(
             {"years_from_today": 5}, today=date(2024, 2, 29)
@@ -123,13 +124,57 @@ class MonitorTests(unittest.TestCase):
             "2026-08-18",
             "2031-08-19",
             "SR 837 & SR 101",
-            "5 Jahre nach dem jeweiligen Abruf",
+            5,
         )
         self.assertIn("Massnahmen &amp; Tests", document)
         self.assertIn("SR 837 &amp; SR 101", document)
         self.assertIn("bis 5 Jahre nach dem jeweiligen Abruf", document)
         self.assertNotIn("2031-08-19", document)
         self.assertNotIn("Generiert", document)
+
+    def test_french_output_uses_french_title_authority_and_links(self) -> None:
+        consolidation = Consolidation(
+            effective_date="2026-08-18",
+            sr_number="946.231.143.6",
+            title="Ordonnance sur les mesures",
+            abstract_uri=self.consolidation.abstract_uri,
+            language_code="fr",
+        )
+        impact = Impact(
+            effective_date="2026-08-18",
+            abstract_uri=self.consolidation.abstract_uri,
+            amendment_date="2026-08-17",
+            publication_date="2026-08-18",
+            as_number="422",
+            act_uri="https://fedlex.data.admin.ch/eli/oc/2026/422",
+            authorities=("Secrétariat d’État à l’économie",),
+            target_subdivisions=(
+                "https://fedlex.data.admin.ch/eli/cc/2025/838/art_1",
+            ),
+            language_code="fr",
+        )
+        entries = merge_entries([consolidation], [impact])
+        self.assertEqual(entries[0].as_reference, "RO 2026 422")
+        self.assertIn("Titre (français)", csv_document(entries, "fr"))
+
+        document = html_document(
+            entries,
+            "2026-08-18",
+            "2031-08-19",
+            "Sélection de test",
+            5,
+            "fr",
+        )
+        self.assertIn('<html lang="fr">', document)
+        self.assertIn("Ordonnance sur les mesures", document)
+        self.assertIn("Secrétariat d’État à l’économie", document)
+        self.assertIn("/fr\"", document)
+        self.assertIn("5 ans après chaque consultation", document)
+
+    def test_language_coverage_must_match_german_rows(self) -> None:
+        entries = merge_entries([self.consolidation], [self.impact])
+        with self.assertRaises(MonitorError):
+            validate_entry_language_coverage(entries)
 
 
 if __name__ == "__main__":

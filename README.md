@@ -1,19 +1,27 @@
 # Fedlex-Monitor für in Kraft tretende SR-Änderungen
 
 Der Monitor fragt die Fedlex-Datenplattform zweimal per HTTP POST ab, verknüpft
-die konsolidierten Fassungen mit den ändernden AS-Erlassen und erzeugt zwei
-statische Dateien für WebSite-Watcher (WSW):
+die konsolidierten Fassungen mit den ändernden Erlassen der Amtlichen Sammlung
+und erzeugt statische Dateien auf Deutsch, Französisch und Italienisch für
+WebSite-Watcher (WSW). Beide Abfragen liefern alle drei Sprachen gemeinsam; die
+Zahl der Anfragen erhöht sich durch die Mehrsprachigkeit deshalb nicht.
 
-- `site/index.html`: lesbare HTML-Tabelle mit Fedlex-Links
-- `site/fedlex-aenderungen.csv`: minimale, besonders diff-freundliche WSW-Quelle
+- `site/index.html` und `site/fedlex-aenderungen.csv`: Deutsch
+- `site/fr/index.html` und `site/fr/fedlex-aenderungen.csv`: Französisch
+- `site/it/index.html` und `site/it/fedlex-aenderungen.csv`: Italienisch
+
+Die drei HTML-Seiten sind untereinander verlinkt. Titel, verantwortliche Stelle,
+Spaltenüberschriften, Fedlex-Links und die Abkürzung der Amtlichen Sammlung
+werden sprachgerecht ausgegeben: AS (de), RO (fr) und RU (it).
 
 Die Ausgabe enthält pro Zeile:
 
 1. Inkrafttretensdatum
 2. SR-Nummer
-3. deutschen Titel
+3. Titel in der jeweiligen Sprache
 4. Änderungsdatum (`jolux:dateDocument` des AS-Erlasses)
-5. AS-Fundstelle, zum Beispiel `AS 2026 422`
+5. Fundstelle der Amtlichen Sammlung, zum Beispiel `AS 2026 422`,
+   `RO 2026 422` oder `RU 2026 422`
 6. verantwortliche Stelle
 
 ## Fachliche Auswahl
@@ -98,20 +106,24 @@ Vor der ersten Veröffentlichung:
 4. Unter **Actions** den Workflow **Fedlex-Monitor veröffentlichen** einmal
    manuell starten.
 
-Für das bestehende Repository sind danach voraussichtlich diese URLs verfügbar:
+Für das bestehende Repository sind diese URLs verfügbar:
 
-- HTML: `https://lexalv.github.io/lexALV_WorkCopy/`
-- CSV: `https://lexalv.github.io/lexALV_WorkCopy/fedlex-aenderungen.csv`
+- Deutsch: `https://lexalv.github.io/fedlex-monitor/`
+- Französisch: `https://lexalv.github.io/fedlex-monitor/fr/`
+- Italienisch: `https://lexalv.github.io/fedlex-monitor/it/`
+- Deutsche CSV: `https://lexalv.github.io/fedlex-monitor/fedlex-aenderungen.csv`
+- Französische CSV: `https://lexalv.github.io/fedlex-monitor/fr/fedlex-aenderungen.csv`
+- Italienische CSV: `https://lexalv.github.io/fedlex-monitor/it/fedlex-aenderungen.csv`
 
 GitHub zeigt die endgültige URL zusätzlich beim erfolgreichen Deploy-Schritt an.
 
 ## Empfehlung für WebSite-Watcher
 
-Die CSV-URL verwenden und eine einfache Textprüfung ohne Browser/JavaScript
-einrichten. Die Datei enthält weder Laufzeitstempel noch zufällige IDs. Bei
-unveränderten Fedlex-Daten sind wiederholte Ausgaben byte-identisch. Sortiert
-wird nach Inkrafttretensdatum, natürlicher SR-Nummer und anschließend stabil
-nach Änderungsdatum und AS-Fundstelle.
+Die CSV-URL der gewünschten Sprache verwenden und eine einfache Textprüfung
+ohne Browser/JavaScript einrichten. Die Dateien enthalten weder Laufzeitstempel
+noch zufällige IDs. Bei unveränderten Fedlex-Daten sind wiederholte Ausgaben
+byte-identisch. Sortiert wird nach Inkrafttretensdatum, natürlicher SR-Nummer
+und anschließend stabil nach Änderungsdatum und Fundstelle.
 
 ## Lokaler Test
 
@@ -123,8 +135,9 @@ python .\monitor.py
 ```
 
 Der zweite Befehl sendet zwei form-urlencodierte POST-Anfragen an
-`https://fedlex.data.admin.ch/sparqlendpoint` und schreibt die fertigen Dateien
-atomar nach `site`.
+`https://fedlex.data.admin.ch/sparqlendpoint`. Jede Abfrage enthält Deutsch,
+Französisch und Italienisch. Die fertigen Dateien werden atomar nach `site`
+geschrieben.
 
 ## Technische Quellen
 

@@ -31,6 +31,66 @@ AS_URI_PATTERN = re.compile(
     r"^https://fedlex\.data\.admin\.ch/eli/oc/(?P<year>\d{4})/(?P<number>[^/]+)$"
 )
 ARTICLE_URI_PATTERN = re.compile(r"/art_(?P<number>\d+)[a-z0-9]*$", re.IGNORECASE)
+LANGUAGE_CODES = ("de", "fr", "it")
+LANGUAGE_OUTPUT_SUBDIRS = {"de": "", "fr": "fr", "it": "it"}
+LANGUAGE_NAMES = {"de": "Deutsch", "fr": "Français", "it": "Italiano"}
+OFFICIAL_COLLECTION_PREFIXES = {"de": "AS", "fr": "RO", "it": "RU"}
+LOCALIZED_TEXT = {
+    "de": {
+        "page_title": "In Kraft tretende Änderungen des Schweizer Bundesrechts",
+        "period": "Zeitraum",
+        "from": "ab",
+        "until": "bis",
+        "entries": "Einträge",
+        "selection": "Auswahl",
+        "download_csv": "CSV herunterladen",
+        "source": "Quelle",
+        "language": "Sprache",
+        "effective_date": "Inkrafttreten",
+        "sr_number": "SR-Nummer",
+        "title": "Titel (deutsch)",
+        "amendment_date": "Änderungsdatum",
+        "as_reference": "AS-Fundstelle",
+        "authority": "Verantwortliche Stelle",
+        "dynamic_years": "{years} Jahre nach dem jeweiligen Abruf",
+    },
+    "fr": {
+        "page_title": "Modifications du droit fédéral suisse entrant en vigueur",
+        "period": "Période",
+        "from": "du",
+        "until": "jusqu’à",
+        "entries": "entrées",
+        "selection": "Sélection",
+        "download_csv": "Télécharger le fichier CSV",
+        "source": "Source",
+        "language": "Langue",
+        "effective_date": "Entrée en vigueur",
+        "sr_number": "Numéro RS",
+        "title": "Titre (français)",
+        "amendment_date": "Date de l’acte modificateur",
+        "as_reference": "Référence RO",
+        "authority": "Service responsable",
+        "dynamic_years": "{years} ans après chaque consultation",
+    },
+    "it": {
+        "page_title": "Modifiche del diritto federale svizzero che entrano in vigore",
+        "period": "Periodo",
+        "from": "dal",
+        "until": "fino a",
+        "entries": "voci",
+        "selection": "Selezione",
+        "download_csv": "Scarica il file CSV",
+        "source": "Fonte",
+        "language": "Lingua",
+        "effective_date": "Entrata in vigore",
+        "sr_number": "Numero RS",
+        "title": "Titolo (italiano)",
+        "amendment_date": "Data dell’atto modificatore",
+        "as_reference": "Riferimento RU",
+        "authority": "Servizio responsabile",
+        "dynamic_years": "{years} anni dopo ogni consultazione",
+    },
+}
 
 
 class MonitorError(RuntimeError):
@@ -43,6 +103,7 @@ class Consolidation:
     sr_number: str
     title: str
     abstract_uri: str
+    language_code: str = "de"
 
 
 @dataclass(frozen=True)
@@ -58,6 +119,11 @@ class Selection:
     exact_sr_numbers: frozenset[str]
     sr_number_prefixes: tuple[str, ...]
     article_ranges: tuple[ArticleRange, ...]
+    localized_descriptions: tuple[tuple[str, str], ...] = ()
+
+    def description_for(self, language_code: str) -> str:
+        descriptions = dict(self.localized_descriptions)
+        return descriptions.get(language_code, self.description)
 
 
 @dataclass(frozen=True)
@@ -70,6 +136,7 @@ class Impact:
     act_uri: str
     authorities: tuple[str, ...]
     target_subdivisions: tuple[str, ...]
+    language_code: str = "de"
 
 
 @dataclass(frozen=True)
@@ -82,6 +149,7 @@ class Entry:
     authority: str
     abstract_uri: str
     act_uri: str
+    language_code: str = "de"
 
 
 def normalized_text(value: str) -> str:
@@ -104,9 +172,9 @@ def date_years_later(value: date, years: int) -> date:
         return value.replace(year=value.year + years, month=2, day=28)
 
 
-def resolve_end_date(raw: Any, *, today: date | None = None) -> tuple[str, str]:
+def resolve_end_date(raw: Any, *, today: date | None = None) -> tuple[str, int | None]:
     if isinstance(raw, str):
-        return parse_iso_date(raw, "Enddatum"), ""
+        return parse_iso_date(raw, "Enddatum"), None
     if not isinstance(raw, dict):
         raise MonitorError(
             "end_date muss ein festes Datum oder ein Objekt mit years_from_today sein."
@@ -119,7 +187,7 @@ def resolve_end_date(raw: Any, *, today: date | None = None) -> tuple[str, str]:
         raise MonitorError("end_date.years_from_today muss mindestens 1 sein.")
 
     end_date = date_years_later(today or date.today(), years).isoformat()
-    return end_date, f"{years} Jahre nach dem jeweiligen Abruf"
+    return end_date, years
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -146,6 +214,7 @@ def parse_selection(raw: Any) -> Selection | None:
     exact_values = raw.get("exact_sr_numbers", [])
     prefix_values = raw.get("sr_number_prefixes", [])
     range_values = raw.get("article_ranges", [])
+    description_values = raw.get("descriptions", {})
     if not isinstance(exact_values, list) or not all(
         isinstance(value, str) and value.strip() for value in exact_values
     ):
@@ -156,6 +225,11 @@ def parse_selection(raw: Any) -> Selection | None:
         raise MonitorError("sr_number_prefixes muss eine Liste von SR-Bereichen sein.")
     if not isinstance(range_values, list):
         raise MonitorError("article_ranges muss eine Liste sein.")
+    if not isinstance(description_values, dict) or not all(
+        key in LANGUAGE_CODES and isinstance(value, str)
+        for key, value in description_values.items()
+    ):
+        raise MonitorError("selection.descriptions enthält ungültige Sprachtexte.")
 
     article_ranges = []
     for item in range_values:
@@ -180,6 +254,12 @@ def parse_selection(raw: Any) -> Selection | None:
             sorted({normalized_text(value).rstrip(".") for value in prefix_values})
         ),
         article_ranges=tuple(article_ranges),
+        localized_descriptions=tuple(
+            sorted(
+                (key, normalized_text(value))
+                for key, value in description_values.items()
+            )
+        ),
     )
     if not (
         selection.exact_sr_numbers
@@ -188,6 +268,13 @@ def parse_selection(raw: Any) -> Selection | None:
     ):
         raise MonitorError("selection enthält keine Auswahlregel.")
     return selection
+
+
+def language_code(binding: dict[str, Any]) -> str:
+    value = normalized_text(binding_value(binding, "languageCode"))
+    if value not in LANGUAGE_CODES:
+        raise MonitorError(f"Unerwarteter Sprachcode von Fedlex: {value!r}")
+    return value
 
 
 def render_query(path: Path, start_date: str, end_date: str) -> str:
@@ -263,7 +350,7 @@ def binding_value(binding: dict[str, Any], name: str, *, required: bool = True) 
 
 
 def parse_consolidations(bindings: Iterable[dict[str, Any]]) -> list[Consolidation]:
-    unique: dict[tuple[str, str, str, str], Consolidation] = {}
+    unique: dict[tuple[str, str, str, str, str], Consolidation] = {}
     for binding in bindings:
         item = Consolidation(
             effective_date=parse_iso_date(
@@ -272,17 +359,24 @@ def parse_consolidations(bindings: Iterable[dict[str, Any]]) -> list[Consolidati
             sr_number=normalized_text(binding_value(binding, "srNumber")),
             title=normalized_text(binding_value(binding, "title")),
             abstract_uri=binding_value(binding, "abstract"),
+            language_code=language_code(binding),
         )
-        key = (item.effective_date, item.sr_number, item.title, item.abstract_uri)
+        key = (
+            item.language_code,
+            item.effective_date,
+            item.sr_number,
+            item.title,
+            item.abstract_uri,
+        )
         unique[key] = item
     return list(unique.values())
 
 
 def parse_impacts(bindings: Iterable[dict[str, Any]]) -> list[Impact]:
-    authorities_by_impact: dict[tuple[str, str, str, str, str, str], set[str]] = (
+    authorities_by_impact: dict[tuple[str, str, str, str, str, str, str], set[str]] = (
         defaultdict(set)
     )
-    targets_by_impact: dict[tuple[str, str, str, str, str, str], set[str]] = (
+    targets_by_impact: dict[tuple[str, str, str, str, str, str, str], set[str]] = (
         defaultdict(set)
     )
 
@@ -313,6 +407,7 @@ def parse_impacts(bindings: Iterable[dict[str, Any]]) -> list[Impact]:
             publication_date,
             as_number,
             act_uri,
+            language_code(binding),
         )
         authority = normalized_text(binding_value(binding, "authority", required=False))
         if authority:
@@ -324,9 +419,15 @@ def parse_impacts(bindings: Iterable[dict[str, Any]]) -> list[Impact]:
         authorities = authorities_by_impact[key]
         impacts.append(
             Impact(
-                *key,
+                effective_date=key[0],
+                abstract_uri=key[1],
+                amendment_date=key[2],
+                publication_date=key[3],
+                as_number=key[4],
+                act_uri=key[5],
                 authorities=tuple(sorted(authorities, key=str.casefold)),
                 target_subdivisions=tuple(sorted(targets)),
+                language_code=key[6],
             )
         )
     return impacts
@@ -351,7 +452,11 @@ def derive_as_reference(impact: Impact) -> str:
             f"{impact.act_uri}: publicationDate={impact.publication_date}, "
             f"sequenceInTheYearOfPublication={impact.as_number}"
         )
-    return f"AS {uri_year} {uri_number}"
+    try:
+        prefix = OFFICIAL_COLLECTION_PREFIXES[impact.language_code]
+    except KeyError as exc:
+        raise MonitorError(f"Unbekannte Ausgabesprache: {impact.language_code!r}") from exc
+    return f"{prefix} {uri_year} {uri_number}"
 
 
 def natural_key(value: str) -> tuple[tuple[int, Any], ...]:
@@ -398,15 +503,22 @@ def merge_entries(
     impacts: Iterable[Impact],
     selection: Selection | None = None,
 ) -> list[Entry]:
-    impacts_by_target: dict[tuple[str, str], list[Impact]] = defaultdict(list)
+    impacts_by_target: dict[tuple[str, str, str], list[Impact]] = defaultdict(list)
     for impact in impacts:
-        impacts_by_target[(impact.effective_date, impact.abstract_uri)].append(impact)
+        impacts_by_target[
+            (impact.language_code, impact.effective_date, impact.abstract_uri)
+        ].append(impact)
 
     entries: list[Entry] = []
     missing: list[Consolidation] = []
     for consolidation in consolidations:
         matches = impacts_by_target.get(
-            (consolidation.effective_date, consolidation.abstract_uri), []
+            (
+                consolidation.language_code,
+                consolidation.effective_date,
+                consolidation.abstract_uri,
+            ),
+            [],
         )
         if not matches:
             missing.append(consolidation)
@@ -425,12 +537,14 @@ def merge_entries(
                     authority="; ".join(impact.authorities) if impact.authorities else "–",
                     abstract_uri=consolidation.abstract_uri,
                     act_uri=impact.act_uri,
+                    language_code=consolidation.language_code,
                 )
             )
 
     if missing:
         examples = ", ".join(
-            f"{item.effective_date} / SR {item.sr_number}" for item in missing[:5]
+            f"{item.language_code}: {item.effective_date} / SR {item.sr_number}"
+            for item in missing[:5]
         )
         raise MonitorError(
             f"{len(missing)} Konsolidierungszeile(n) konnten keinem AS-Impact "
@@ -447,12 +561,14 @@ def merge_entries(
             item.authority,
             item.abstract_uri,
             item.act_uri,
+            item.language_code,
         ): item
         for item in entries
     }
     return sorted(
         unique.values(),
         key=lambda item: (
+            LANGUAGE_CODES.index(item.language_code),
             item.effective_date,
             natural_key(item.sr_number),
             item.sr_number,
@@ -463,34 +579,69 @@ def merge_entries(
     )
 
 
-def public_fedlex_url(data_uri: str) -> str:
+def public_fedlex_url(data_uri: str, language_code: str = "de") -> str:
     prefix = "https://fedlex.data.admin.ch/"
     if not data_uri.startswith(prefix):
         raise MonitorError(f"Unerwartete Fedlex-Daten-URI: {data_uri}")
-    return "https://www.fedlex.admin.ch/" + data_uri.removeprefix(prefix) + "/de"
+    if language_code not in LANGUAGE_CODES:
+        raise MonitorError(f"Unbekannte Ausgabesprache: {language_code!r}")
+    return (
+        "https://www.fedlex.admin.ch/"
+        + data_uri.removeprefix(prefix)
+        + f"/{language_code}"
+    )
 
 
-def csv_document(entries: Iterable[Entry]) -> str:
+def validate_entry_language_coverage(entries: Iterable[Entry]) -> None:
+    identities_by_language: dict[str, set[tuple[str, str, str, str, str]]] = {
+        code: set() for code in LANGUAGE_CODES
+    }
+    for item in entries:
+        identities_by_language[item.language_code].add(
+            (
+                item.effective_date,
+                item.sr_number,
+                item.amendment_date,
+                item.abstract_uri,
+                item.act_uri,
+            )
+        )
+
+    reference = identities_by_language["de"]
+    for code in LANGUAGE_CODES[1:]:
+        if identities_by_language[code] == reference:
+            continue
+        missing = reference - identities_by_language[code]
+        additional = identities_by_language[code] - reference
+        raise MonitorError(
+            f"Fedlex-Sprachabdeckung für die gefilterten Treffer in {code!r} "
+            f"weicht von Deutsch ab: {len(missing)} fehlend, "
+            f"{len(additional)} zusätzlich."
+        )
+
+
+def csv_document(entries: Iterable[Entry], language_code: str = "de") -> str:
+    strings = LOCALIZED_TEXT[language_code]
     output = io.StringIO(newline="")
     fieldnames = [
-        "Inkrafttreten",
-        "SR-Nummer",
-        "Titel (deutsch)",
-        "Änderungsdatum",
-        "AS-Fundstelle",
-        "Verantwortliche Stelle",
+        strings["effective_date"],
+        strings["sr_number"],
+        strings["title"],
+        strings["amendment_date"],
+        strings["as_reference"],
+        strings["authority"],
     ]
     writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\n")
     writer.writeheader()
     for item in entries:
         writer.writerow(
             {
-                "Inkrafttreten": item.effective_date,
-                "SR-Nummer": item.sr_number,
-                "Titel (deutsch)": item.title,
-                "Änderungsdatum": item.amendment_date,
-                "AS-Fundstelle": item.as_reference,
-                "Verantwortliche Stelle": item.authority,
+                strings["effective_date"]: item.effective_date,
+                strings["sr_number"]: item.sr_number,
+                strings["title"]: item.title,
+                strings["amendment_date"]: item.amendment_date,
+                strings["as_reference"]: item.as_reference,
+                strings["authority"]: item.authority,
             }
         )
     return output.getvalue()
@@ -501,45 +652,73 @@ def html_document(
     start_date: str,
     end_date: str,
     selection_description: str = "",
-    dynamic_end_label: str = "",
+    dynamic_end_years: int | None = None,
+    language_code: str = "de",
 ) -> str:
+    strings = LOCALIZED_TEXT[language_code]
     rows = []
     for item in entries:
         rows.append(
             "      <tr>\n"
             f'        <td><time datetime="{item.effective_date}">{item.effective_date}</time></td>\n'
-            f'        <td><a href="{html.escape(public_fedlex_url(item.abstract_uri), quote=True)}">{html.escape(item.sr_number)}</a></td>\n'
+            f'        <td><a href="{html.escape(public_fedlex_url(item.abstract_uri, language_code), quote=True)}">{html.escape(item.sr_number)}</a></td>\n'
             f"        <td>{html.escape(item.title)}</td>\n"
             f'        <td><time datetime="{item.amendment_date}">{item.amendment_date}</time></td>\n'
-            f'        <td><a href="{html.escape(public_fedlex_url(item.act_uri), quote=True)}">{html.escape(item.as_reference)}</a></td>\n'
+            f'        <td><a href="{html.escape(public_fedlex_url(item.act_uri, language_code), quote=True)}">{html.escape(item.as_reference)}</a></td>\n'
             f"        <td>{html.escape(item.authority)}</td>\n"
             "      </tr>"
         )
 
     table_rows = "\n".join(rows)
     selection_paragraph = (
-        f"\n    <p><strong>Auswahl:</strong> {html.escape(selection_description)}</p>"
+        f'\n    <p><strong>{html.escape(strings["selection"])}:</strong> '
+        f"{html.escape(selection_description)}</p>"
         if selection_description
         else ""
     )
+    language_links = []
+    for code in LANGUAGE_CODES:
+        if code == language_code:
+            language_links.append(
+                f'<strong lang="{code}">{html.escape(LANGUAGE_NAMES[code])}</strong>'
+            )
+            continue
+        href = (
+            f"{code}/"
+            if language_code == "de"
+            else "../" if code == "de" else f"../{code}/"
+        )
+        language_links.append(
+            f'<a lang="{code}" href="{href}">{html.escape(LANGUAGE_NAMES[code])}</a>'
+        )
+    language_navigation = " · ".join(language_links)
+
+    dynamic_end_label = (
+        strings["dynamic_years"].format(years=dynamic_end_years)
+        if dynamic_end_years is not None
+        else ""
+    )
     period_text = (
-        f'ab <time datetime="{start_date}">{start_date}</time> bis '
+        f'{html.escape(strings["from"])} <time datetime="{start_date}">{start_date}</time> '
+        f'{html.escape(strings["until"])} '
         f"{html.escape(dynamic_end_label)}"
         if dynamic_end_label
-        else f'<time datetime="{start_date}">{start_date}</time> bis '
+        else f'{html.escape(strings["from"])} <time datetime="{start_date}">{start_date}</time> '
+        f'{html.escape(strings["until"])} '
         f'<time datetime="{end_date}">{end_date}</time>'
     )
     return f"""<!doctype html>
-<html lang="de">
+<html lang="{language_code}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>In Kraft tretende Änderungen des Schweizer Bundesrechts</title>
+  <title>{html.escape(strings["page_title"])}</title>
   <style>
     :root {{ color-scheme: light; font-family: system-ui, sans-serif; }}
     body {{ margin: 2rem auto; max-width: 100rem; padding: 0 1rem; color: #1b1b1b; }}
     h1 {{ font-size: 1.6rem; margin-bottom: .5rem; }}
     p {{ margin: .4rem 0 1rem; }}
+    .languages {{ margin-bottom: 1.2rem; }}
     table {{ border-collapse: collapse; width: 100%; }}
     th, td {{ border: 1px solid #bbb; padding: .45rem .55rem; text-align: left; vertical-align: top; }}
     th {{ background: #eee; position: sticky; top: 0; }}
@@ -549,18 +728,19 @@ def html_document(
 </head>
 <body>
   <main>
-    <h1>In Kraft tretende Änderungen des Schweizer Bundesrechts</h1>
-    <p>Zeitraum: {period_text}. Einträge: {len(entries)}.</p>{selection_paragraph}
-    <p><a href="fedlex-aenderungen.csv">CSV herunterladen</a> · Quelle: <a href="https://fedlex.data.admin.ch/">Fedlex-Datenplattform</a></p>
+    <h1>{html.escape(strings["page_title"])}</h1>
+    <p class="languages"><strong>{html.escape(strings["language"])}:</strong> {language_navigation}</p>
+    <p>{html.escape(strings["period"])}: {period_text}. {html.escape(strings["entries"])}: {len(entries)}.</p>{selection_paragraph}
+    <p><a href="fedlex-aenderungen.csv">{html.escape(strings["download_csv"])}</a> · {html.escape(strings["source"])}: <a href="https://fedlex.data.admin.ch/">Fedlex</a></p>
     <table>
       <thead>
         <tr>
-          <th>Inkrafttreten</th>
-          <th>SR-Nummer</th>
-          <th>Titel (deutsch)</th>
-          <th>Änderungsdatum</th>
-          <th>AS-Fundstelle</th>
-          <th>Verantwortliche Stelle</th>
+          <th>{html.escape(strings["effective_date"])}</th>
+          <th>{html.escape(strings["sr_number"])}</th>
+          <th>{html.escape(strings["title"])}</th>
+          <th>{html.escape(strings["amendment_date"])}</th>
+          <th>{html.escape(strings["as_reference"])}</th>
+          <th>{html.escape(strings["authority"])}</th>
         </tr>
       </thead>
       <tbody>
@@ -600,16 +780,16 @@ def generate(
     start_override: str | None = None,
     end_override: str | None = None,
     output_override: Path | None = None,
-) -> tuple[int, Path]:
+) -> tuple[dict[str, int], Path]:
     config_path = config_path.resolve()
     config = load_config(config_path)
     selection = parse_selection(config.get("selection"))
     start_date = parse_iso_date(start_override or config["start_date"], "Startdatum")
     if end_override:
         end_date = parse_iso_date(end_override, "Enddatum")
-        dynamic_end_label = ""
+        dynamic_end_years = None
     else:
-        end_date, dynamic_end_label = resolve_end_date(config["end_date"])
+        end_date, dynamic_end_years = resolve_end_date(config["end_date"])
     if start_date > end_date:
         raise MonitorError("Das Startdatum liegt nach dem Enddatum.")
 
@@ -642,19 +822,31 @@ def generate(
     entries = merge_entries(
         consolidations, parse_impacts(impact_bindings), selection=selection
     )
+    validate_entry_language_coverage(entries)
 
-    atomic_write(output_dir / "fedlex-aenderungen.csv", csv_document(entries))
-    atomic_write(
-        output_dir / "index.html",
-        html_document(
-            entries,
-            start_date,
-            end_date,
-            selection_description=selection.description if selection else "",
-            dynamic_end_label=dynamic_end_label,
-        ),
-    )
-    return len(entries), output_dir
+    counts: dict[str, int] = {}
+    for code in LANGUAGE_CODES:
+        localized_entries = [item for item in entries if item.language_code == code]
+        localized_output_dir = output_dir / LANGUAGE_OUTPUT_SUBDIRS[code]
+        atomic_write(
+            localized_output_dir / "fedlex-aenderungen.csv",
+            csv_document(localized_entries, code),
+        )
+        atomic_write(
+            localized_output_dir / "index.html",
+            html_document(
+                localized_entries,
+                start_date,
+                end_date,
+                selection_description=(
+                    selection.description_for(code) if selection else ""
+                ),
+                dynamic_end_years=dynamic_end_years,
+                language_code=code,
+            ),
+        )
+        counts[code] = len(localized_entries)
+    return counts, output_dir
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -671,7 +863,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        count, output_dir = generate(
+        counts, output_dir = generate(
             args.config,
             start_override=args.start,
             end_override=args.end,
@@ -681,7 +873,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Fehler: {exc}", file=sys.stderr)
         return 1
 
-    print(f"{count} Einträge nach {output_dir} geschrieben.")
+    count_text = ", ".join(f"{code}: {counts[code]}" for code in LANGUAGE_CODES)
+    print(f"Einträge ({count_text}) nach {output_dir} geschrieben.")
     return 0
 
 

@@ -1,0 +1,33 @@
+{
+  "endpoint": "https://fedlex.data.admin.ch/sparqlendpoint",
+  "start_date": "2026-08-18",
+  "end_date": {
+    "years_from_today": 5
+  },
+  "output_dir": "site",
+  "timeout_seconds": 120,
+  "max_attempts": 4,
+  "allow_empty": false,
+  "user_agent": "lexALV-Fedlex-In-Force-Monitor/1.0",
+  "selection": {
+    "description": "SR 837 Arbeitslosenversicherung mit allen Untererlassen; zusätzlich SR 101, 173.110, 830.1, 830.11, 832.20 und 832.202; beim OR (SR 220) nur der Zehnte Titel (Art. 319–362).",
+    "exact_sr_numbers": [
+      "101",
+      "173.110",
+      "830.1",
+      "830.11",
+      "832.20",
+      "832.202"
+    ],
+    "sr_number_prefixes": [
+      "837"
+    ],
+    "article_ranges": [
+      {
+        "sr_number": "220",
+        "first_article": 319,
+        "last_article": 362
+      }
+    ]
+  }
+}

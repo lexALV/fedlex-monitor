@@ -1,0 +1,48 @@
+PREFIX jolux: <http://data.legilux.public.lu/resource/ontology/jolux#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT DISTINCT
+  ?effectiveDate
+  ?abstract
+  ?targetSubdivision
+  ?amendmentDate
+  ?publicationDate
+  ?asNumber
+  ?authority
+  ?act
+WHERE {
+  ?impact a jolux:LegalResourceImpact ;
+          jolux:legalResourceImpactHasDateEntryInForce ?effectiveDate ;
+          jolux:impactToLegalResource ?targetSubdivision ;
+          jolux:impactFromLegalResource ?sourceSubdivision .
+
+  FILTER(
+    xsd:date(?effectiveDate) >= "{{START_DATE}}"^^xsd:date &&
+    xsd:date(?effectiveDate) <= "{{END_DATE}}"^^xsd:date
+  )
+
+  ?targetSubdivision jolux:legalResourceSubdivisionIsPartOf ?abstract .
+  ?abstract a jolux:ConsolidationAbstract .
+
+  ?sourceSubdivision jolux:legalResourceSubdivisionIsPartOf ?act .
+  ?act a jolux:Act .
+
+  OPTIONAL { ?act jolux:dateDocument ?amendmentDate . }
+  OPTIONAL { ?act jolux:publicationDate ?publicationDate . }
+  OPTIONAL { ?act jolux:sequenceInTheYearOfPublication ?asNumber . }
+  OPTIONAL {
+    ?act jolux:responsibilityOf ?institution .
+    ?institution skos:prefLabel ?authority .
+    FILTER(lang(?authority) = "de")
+  }
+}
+ORDER BY
+  ?effectiveDate
+  ?abstract
+  ?targetSubdivision
+  ?amendmentDate
+  ?publicationDate
+  ?asNumber
+  ?act
+  ?authority

@@ -1,0 +1,21 @@
+PREFIX jolux: <http://data.legilux.public.lu/resource/ontology/jolux#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT DISTINCT ?effectiveDate ?srNumber ?title ?abstract WHERE {
+  ?consolidation jolux:isMemberOf ?abstract ;
+                 jolux:dateApplicability ?effectiveDate .
+
+  FILTER(
+    xsd:date(?effectiveDate) >= "{{START_DATE}}"^^xsd:date &&
+    xsd:date(?effectiveDate) <= "{{END_DATE}}"^^xsd:date
+  )
+
+  ?abstract jolux:classifiedByTaxonomyEntry ?taxonomyEntry ;
+            jolux:isRealizedBy ?expression .
+  ?taxonomyEntry skos:notation ?srNumber .
+  ?expression jolux:language
+                  <http://publications.europa.eu/resource/authority/language/DEU> ;
+              jolux:title ?title .
+}
+ORDER BY ?effectiveDate ?srNumber ?abstract

@@ -10,10 +10,10 @@
   "allow_empty": false,
   "user_agent": "lexALV-Fedlex-In-Force-Monitor/1.0",
   "selection": {
-    "description": "SR 837 Arbeitslosenversicherung mit allen Untererlassen; zusätzlich SR 101, 173.110, 830.1, 830.11, 832.20 und 832.202; beim OR (SR 220) nur der Zehnte Titel (Art. 319–362).",
+    "description": "SR 837 Arbeitslosenversicherung mit allen Untererlassen; zusätzlich SR 101, 173.110, 830.1, 830.11, 832.20, 832.202, 822.11, 822.111, 822.112, 822.113, 822.114, 822.115, 823.11, 823.111 und 823.113; beim OR (SR 220) nur der Zehnte Titel (Art. 319–362).",
     "descriptions": {
-      "fr": "RS 837 Assurance-chômage avec tous ses actes subordonnés; en plus RS 101, 173.110, 830.1, 830.11, 832.20 et 832.202; pour le CO (RS 220), uniquement le titre dixième (art. 319–362).",
-      "it": "RS 837 Assicurazione contro la disoccupazione con tutti gli atti subordinati; inoltre RS 101, 173.110, 830.1, 830.11, 832.20 e 832.202; per il CO (RS 220), soltanto il titolo decimo (art. 319–362)."
+      "fr": "RS 837 Assurance-chômage avec tous ses actes subordonnés; en plus RS 101, 173.110, 830.1, 830.11, 832.20, 832.202, 822.11, 822.111, 822.112, 822.113, 822.114, 822.115, 823.11, 823.111 et 823.113; pour le CO (RS 220), uniquement le titre dixième (art. 319–362).",
+      "it": "RS 837 Assicurazione contro la disoccupazione con tutti gli atti subordinati; inoltre RS 101, 173.110, 830.1, 830.11, 832.20, 832.202, 822.11, 822.111, 822.112, 822.113, 822.114, 822.115, 823.11, 823.111 e 823.113; per il CO (RS 220), soltanto il titolo decimo (art. 319–362)."
     },
     "exact_sr_numbers": [
       "101",
@@ -21,15 +21,15 @@
       "830.1",
       "830.11",
       "832.20",
-      "832.202"
-      "822.11"
-      "822.111"
-      "822.112"
-      "822.113"
-      "822.114"
-      "822.115"
-      "823.11"
-      "823.111"
+      "832.202",
+      "822.11",
+      "822.111",
+      "822.112",
+      "822.113",
+      "822.114",
+      "822.115",
+      "823.11",
+      "823.111",
       "823.113"
     ],
     "sr_number_prefixes": [

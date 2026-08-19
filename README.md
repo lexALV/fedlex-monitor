@@ -31,7 +31,8 @@ sind:
 
 - der ganze Bereich SR 837 Arbeitslosenversicherung einschließlich aller
   Nummern, die mit `837.` beginnen;
-- exakt SR 101, 173.110, 830.1, 830.11, 832.20 und 832.202;
+- exakt SR 101, 173.110, 830.1, 830.11, 832.20, 832.202, 822.11,
+  822.111, 822.112, 822.113, 822.114, 822.115, 823.11, 823.111 und 823.113;
 - vom OR (SR 220) nur der Zehnte Titel über den Arbeitsvertrag, also die
   Art. 319–362.
 
